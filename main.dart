@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:sensors/sensors.dart';
 import 'dart:math';
+import 'dart:io';
 
 void main() {
   runApp(MyApp());
@@ -14,12 +15,14 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool first_run = true;  //indicating first run
-  int weight = 70; //user's weight in kilograms
-  int threshold = 40; //threshold acceleration
+  int weight = 71; //user's weight in kilograms
+  int threshold = 40;
 
   int jumps = 0; // jump count
   int jumps_before = 0; //jumps 3 seconds before
+  int recent_jumps; //jumps in 3 seconds
   double calories = 0; // calories burnt
+  double MET; //MET value
 
   var button_label = 'Start';  //button label
 
@@ -39,44 +42,57 @@ class _MyAppState extends State<MyApp> {
         ),
 
         drawer: Drawer(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: <Widget>[
-                DrawerHeader(
-                  child: Text('Settings',
-                    style: TextStyle(fontSize: 25),),
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
+          // Add a ListView to the drawer. This ensures the user can scroll
+          // through the options in the drawer if there isn't enough vertical
+          // space to fit everything.
+          child: ListView(
+            // Important: Remove any padding from the ListView.
+            padding: EdgeInsets.zero,
+            children: <Widget>[
+              DrawerHeader(
+                child: Text('Settings',
+                  style: TextStyle(fontSize: 50),
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                ),
+              ),
+              ListTile(
+                title: TextFormField(
+                  decoration: InputDecoration(
+                      border: UnderlineInputBorder(),
+                      labelText: 'Enter weight (kg):'
                   ),
+                  initialValue: '${weight}',
+                  style: TextStyle(
+                    fontSize: 30.0,
+                  ),
+                  onChanged: (new_weight) {
+                    setState(() {
+                      weight = int.parse(new_weight);
+                    });
+                  },
                 ),
-                ListTile(
-                  title: TextFormField(
-                    initialValue: weight.toString(),
-                    onChanged: (input){
-                      setState(() => weight = int.parse(input));
-                      print(weight);
-                    },
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Enter weight (kg):',
-                    ),
-                  )
+              ),
+              ListTile(
+                title: TextFormField(
+                  decoration: InputDecoration(
+                      border: UnderlineInputBorder(),
+                      labelText: 'Enter threshold (m/s^2):'
+                  ),
+                  initialValue: '${threshold}',
+                  style: TextStyle(
+                    fontSize: 30.0,
+                  ),
+                  onChanged: (new_threshold) {
+                    setState(() {
+                      threshold = int.parse(new_threshold);
+                    });
+                  },
                 ),
-                ListTile(
-                  title: TextFormField(
-                    initialValue: threshold.toString(),
-                    onChanged: (input){
-                      setState(() => threshold = int.parse(input));
-                      print(threshold);
-                    },
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Enter threshold (m/s^2):',
-                    ),
-                  )
-                ),
-              ],
-            ),
+              ),
+            ],
+          ),
         ),
 
         body: Center(
@@ -111,11 +127,11 @@ class _MyAppState extends State<MyApp> {
                     first_run = false;
                     setState(() => button_label = 'Reset');
                   } else {    //not the first run anymore
-                  	setState(() {   //reset jump count & calories to zero
+                    setState(() {   //reset jump count & calories to zero
                       calories = 0;
                       jumps = 0;
-                  	});
-                  	jumps_before = 0;
+                    });
+                    jumps_before = 0;
 
                     accel_stream.cancel();  //cancel accelerometer stream
                   }
@@ -129,12 +145,14 @@ class _MyAppState extends State<MyApp> {
                     acceleration = sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
                     vals.add(acceleration);
                     vals.removeAt(0);
+
+                    //detect jump
                     if (vals[1] > threshold && vals[1] > vals[0] && vals[1] > vals[2]){
                       setState(() => jumps++);  //update jump count display
 
+                      //count calories after every 3 seconds
                       if (s.elapsedMilliseconds  >= 3000) {
-                        int recent_jumps = jumps - jumps_before; // jumps in 3 seconds
-                        double MET;
+                          recent_jumps = jumps - jumps_before;
 
                         if (recent_jumps > 6){
                           MET = .615;
@@ -145,11 +163,12 @@ class _MyAppState extends State<MyApp> {
                         }
 
                         setState(() => calories += (MET * weight * 3.5) / 200);
-                        s.reset();
                         jumps_before = jumps;
-
+                        s.reset();
                       }
                     }
+
+
                   });
                 },
               ),
